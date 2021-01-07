@@ -5,7 +5,8 @@ import logging
 import random
 from picframe import exif2dict
 
-DEFAULT_CONFIGFILE = "~/.local/picframe/config/configuration.yaml"
+DEFAULT_CONFIGFILE = "~/.local/picframe/config/configuration.yaml" #sets Defalut config file
+#define default configuration values
 DEFAULT_CONFIG = {
     'viewer': {
         'blur_amount': 12,
@@ -48,21 +49,22 @@ EXTENSIONS = ['.png','.jpg','.jpeg'] # can add to these
 
 class Model:
 
-    def __init__(self, configfile = DEFAULT_CONFIGFILE):
-        self.__logger = logging.getLogger("model.Model")
+    def __init__(self, configfile = DEFAULT_CONFIGFILE):  # if no arg passed use default config file defined above
+        self.__logger = logging.getLogger("model.Model")  # set up Model logging
         self.__logger.debug('creating an instance of Model')
-        self.__config = DEFAULT_CONFIG
-        self.__last_file_change = 0.0
-        configfile = os.path.expanduser(configfile)
-        self.__logger.info("Open config file: %s:",configfile)
-        with open(configfile, 'r') as stream:
-            try:
-                conf = yaml.safe_load(stream)
-                for section in ['viewer', 'model', 'mqtt']:
+        self.__config = DEFAULT_CONFIG # sets cofiguration to default values defined above
+        self.__last_file_change = 0.0 # initializes to 0
+        configfile = os.path.expanduser(configfile) # expands file name to full OS path
+        self.__logger.info("Open config file: %s:",configfile) #INFO:model.Model:Open config file: /root/.local/picframe/config/configuration.yaml:
+        with open(configfile, 'r') as stream: #open config file ReadOnly as "stream"
+            try: #if no error from opening, proceed
+                conf = yaml.safe_load(stream) # load trusted YAML stream to conf
+                for section in ['viewer', 'model', 'mqtt']: #set configuration for 3 other sections
                     self.__config[section] = {**DEFAULT_CONFIG[section], **conf[section]}
                 self.__logger.debug('config data = %s', self.__config)
             except yaml.YAMLError as exc:
-                self.__logger.error("Can't parse yaml config file: %s: %s", configfile, exc)
+                self.__logger.error("Can't parse yaml config file: %s: %s", configfile, exc) #log error if fonfig file not opened
+        #initializes working variables.
         self.__file_list = []
         self.__number_of_files = 0
         self.__reload_files = False
@@ -158,35 +160,35 @@ class Model:
         file_path_name = os.path.expanduser(file_path_name)
         dt = os.path.getmtime(file_path_name) # use file last modified date as default
         try:
-            exifs = exif2dict.Exif2Dict(file_path_name)
-            val = exifs.get_exif('EXIF DateTimeOriginal')
-            if val['EXIF DateTimeOriginal'] != None:
+            exifs = exif2dict.Exif2Dict(file_path_name) #gets EXIF image data
+            val = exifs.get_exif('EXIF DateTimeOriginal') #gets image date
+            if val['EXIF DateTimeOriginal'] != None: #if not empty, formate
                 dt = time.mktime(time.strptime(val['EXIF DateTimeOriginal'], '%Y:%m:%d %H:%M:%S'))
         except OSError as e:
             self.__logger.warning("Can't extract exif data from file: \"%s\"", file_path_name)
             self.__logger.warning("Cause: %s", e.args[1])
         return dt
 
-    def __get_image_attr(self, file_path_name):
-        orientation = 1
-        image_attr_list = {}
+    def __get_image_attr(self, file_path_name): #get image attributes
+        orientation = 1; # defalut orientation to TL (landscape) 8=Portrait 90 left, 6 = portrait 90 deg right
+        image_attr_list = {} # initialize atribute list
         try:
-            exifs = exif2dict.Exif2Dict(file_path_name)
-            val = exifs.get_exif('EXIF Orientation')
+            exifs = exif2dict.Exif2Dict(file_path_name) # gets image attributes
+            val = exifs.get_exif('EXIF Orientation') # Orientation
             if val['EXIF Orientation'] != None:
-                orientation = int(val['EXIF Orientation'])
+                orientation = int(val['EXIF Orientation']) #formats orientation to integer
             for exif in self.get_model_config()['image_attr']:
                 if (exif == 'PICFRAME GPS'):
-                    image_attr_list.update(exifs.get_locaction())
+                    image_attr_list.update(exifs.get_locaction()) #special processing of GPS
                 else:
-                    image_attr_list.update(exifs.get_exif(exif))
+                    image_attr_list.update(exifs.get_exif(exif)) #straight return of all other attributes
         except OSError as e:
             self.__logger.warning("Can't extract exif data from file: \"%s\"", file_path_name)
             self.__logger.warning("Cause: %s", e.args[1])
         return orientation, image_attr_list
 
-    def __get_files(self):
-        self.__file_list = []
+    def __get_files(self):  #pulls files list from directory
+        self.__file_list = [] #initializes file list array
         picture_dir = os.path.join(os.path.expanduser(self.get_model_config()['pic_dir']), self.get_model_config()['subdirectory'])
         for root, _dirnames, filenames in os.walk(picture_dir):
             mod_tm = os.stat(root).st_mtime # time of alteration in a directory
@@ -196,40 +198,40 @@ class Model:
                 ext = os.path.splitext(filename)[1].lower()
                 if ext in EXTENSIONS and not '.AppleDouble' in root and not filename.startswith('.'):
                     file_path_name = os.path.join(root, filename)
-                    dt = self.__get_image_date(file_path_name)
+                    dt = self.__get_image_date(file_path_name) #get formated image date [EXIF or File date]
                     # iFiles now list of lists [file_name, exif or if not exist file_changed_date] 
-                    self.__file_list.append([file_path_name, dt])
-        if len(self.__file_list) == 0:
+                    self.__file_list.append([file_path_name, dt]) #adds file path and file date to list
+        if len(self.__file_list) == 0: #check for no files in directory
             img = os.path.expanduser(self.get_model_config()['no_files_img'])
             dt = self.__get_image_date(img)
             self.__file_list.append([img, dt])
         else: 
-            if self.get_model_config()['shuffle']:
+            if self.get_model_config()['shuffle']: # shuffle images if set to True
                 self.__shuffle_files()
             else:
-                self.__sort_files()
-        self.__number_of_files = len(self.__file_list)
-        self.__file_index = 0
-        self.__num_run_through = 0
-        self.__reload_files = False
+                self.__sort_files() #sort by name
+        self.__number_of_files = len(self.__file_list) #set total number of files in list
+        self.__file_index = 0 #resets index
+        self.__num_run_through = 0 #reset run through number
+        self.__reload_files = False # clear reload flag
         
     
     def set_next_file_to_privious_file(self):
         self.__file_index = (self.__file_index - 2) % self.get_number_of_files()
     
-    def get_next_file(self, date_from = None, date_to = None):
-        if self.__reload_files == True:
-            self.__get_files()
+    def get_next_file(self, date_from = None, date_to = None):  #Main image change routine
+        if self.__reload_files == True: # test for loading files
+            self.__get_files() # load file list
 
-        if self.__file_index == self.__number_of_files:
-            self.__num_run_through += 1
-            if self.get_model_config()['shuffle'] and (self.__num_run_through >= self.get_model_config()['reshuffle_num']):
-                self.__num_run_through = 0
-                self.__shuffle_files()
-            self.__file_index = 0
+        if self.__file_index == self.__number_of_files: #test if file index = total number of files (all files shown)
+            self.__num_run_through += 1 # increment times through count
+            if self.get_model_config()['shuffle'] and (self.__num_run_through >= self.get_model_config()['reshuffle_num']): #if shuffle is true and runthrough count >= reshuffle target
+                self.__num_run_through = 0 #reset run through count
+                self.__shuffle_files() # reshuffle files list
+            self.__file_index = 0 #reset file index
 
-        found = False
-        for _ in range(0,self.get_number_of_files()):
+        found = False # initialize flag
+        for _ in range(0,self.get_number_of_files()): # find next file that meets date filter increments on skips)
             if date_from is not None:
                 if self.__file_list[self.__file_index][1] < date_from:
                     self.__file_index = (self.__file_index + 1) % self.get_number_of_files()
@@ -241,11 +243,11 @@ class Model:
             found = True
             break
         if found == True:
-            file = self.__file_list[self.__file_index][0]
+            file = self.__file_list[self.__file_index][0] # sets file to next image
         else:
-            file = os.path.expanduser(self.get_model_config()['no_files_img'])
-        orientation, image_attr = self.__get_image_attr(file)
-        self.__file_index  += 1
+            file = os.path.expanduser(self.get_model_config()['no_files_img']) # on no matching image, load no image
+        orientation, image_attr = self.__get_image_attr(file) # get image attributes
+        self.__file_index  += 1 # increment file index
         self.__logger.info('Next file in list: %s', file)
         self.__logger.debug('Image attributes: %s', image_attr)
         return file, orientation, image_attr

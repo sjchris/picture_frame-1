@@ -77,23 +77,23 @@ class Controller:
         self.__date_to = val
 
     def loop(self):
-        next_check_tm = time.time() + self.__model.get_model_config()['check_dir_tm']
+        next_check_tm = time.time() + self.__model.get_model_config()['check_dir_tm'] # sets time to re-read fiels for changes
         while True:
 
-            if self.__next_tm == 0:
+            if self.__next_tm == 0: # initializes time delay and fade time on first loop
                 time_delay = 1 # must not be 0
                 fade_time = 1 # must not be 0
             else:
                 time_delay = self.__model.time_delay
                 fade_time = self.__model.fade_time
 
-            tm = time.time()
+            tm = time.time() # current time
             next_file = None
-            orientation = 1
-            if not self.paused and tm > self.__next_tm:
-                self.__next_tm = tm + self.__model.time_delay
-                next_file, orientation, image_attr = self.__model.get_next_file(self.date_from, self.date_to)
-                self.publish_sensors(next_file, image_attr)
+            orientation = 1 #landscape
+            if not self.paused and tm > self.__next_tm:  #if not paused and current time >
+                self.__next_tm = tm + self.__model.time_delay #calculate next time + current time
+                next_file, orientation, image_attr = self.__model.get_next_file(self.date_from, self.date_to) # get next file that atisfies the date filters
+                self.publish_sensors(next_file, image_attr) # publish changes to MQTT
                 
             if self.__viewer.is_in_transition() == False: # safe to do long running tasks
                 if tm > next_check_tm:
@@ -106,24 +106,24 @@ class Controller:
     
     def start(self):
         try:
-            device_id = self.__model.get_mqtt_config()['device_id']
-            self.__client = mqtt.Client(client_id = device_id, clean_session=True)
-            login = self.__model.get_mqtt_config()['login']
-            password = self.__model.get_mqtt_config()['password']
-            self.__client.username_pw_set(login, password) 
-            tls = self.__model.get_mqtt_config()['tls']
+            device_id = self.__model.get_mqtt_config()['device_id'] # initialize MQTT Client config
+            self.__client = mqtt.Client(client_id = device_id, clean_session=True) # create MQTT client
+            login = self.__model.get_mqtt_config()['login']  # login
+            password = self.__model.get_mqtt_config()['password'] # password
+            self.__client.username_pw_set(login, password)  # pass credentials to client instance
+            tls = self.__model.get_mqtt_config()['tls'] # Certificate to use for TLS
             if tls:
-                self.__client.tls_set(tls)
-            server = os.path.expanduser(self.__model.get_mqtt_config()['server'])
-            port = self.__model.get_mqtt_config()['port']
-            self.__client.connect(server, port, 60) 
-            self.__client.will_set("homeassistant/switch/" + self.__model.get_mqtt_config()['device_id'] + "/available", "offline", qos=0, retain=True)
-            self.__client.on_connect = self.on_connect
-            self.__client.on_message = self.on_message
-            self.__client.loop_start()
+                self.__client.tls_set(tls) #set client certificate
+            server = os.path.expanduser(self.__model.get_mqtt_config()['server']) # define server address
+            port = self.__model.get_mqtt_config()['port'] # server port
+            self.__client.connect(server, port, 60) # connect to server with 60 second timeout
+            self.__client.will_set("homeassistant/switch/" + self.__model.get_mqtt_config()['device_id'] + "/available", "offline", qos=0, retain=True) #create online will message
+            self.__client.on_connect = self.on_connect # raise connection
+            self.__client.on_message = self.on_message # publish first message
+            self.__client.loop_start() # start monitor to mqtt buffer for session
         except Exception as e:
-            self.__logger.info("MQTT not set up because of: {}".format(e))
-        self.__viewer.slideshow_start()
+            self.__logger.info("MQTT not set up because of: {}".format(e)) #log MQTT failure
+        self.__viewer.slideshow_start() # call slideshow even if MQTT is not up.
 
     def stop(self):
         try:

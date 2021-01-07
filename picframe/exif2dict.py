@@ -11,7 +11,10 @@ class Exif2Dict:
         self.__tags = {}
         try:
             with open(filename, 'rb') as fh:
-                self.__tags = exifread.process_file(fh, details=False)
+                self.__tags = exifread.process_file(fh, details=False) # reads EXIF data from target file
+                #####
+                # INCLUDE IPTC READ HERE
+                #####
         except OSError as e:
             self.__logger.warning("Can't open file: \"%s\"", filename)
             self.__logger.warning("Cause: %s", e.args[1])
@@ -23,7 +26,7 @@ class Exif2Dict:
         else:
             return True
 
-    def __get_if_exist(self, key):
+    def __get_if_exist(self, key): #test if key exists
         if key in self.__tags:
             return self.__tags[key]
         return None
@@ -55,11 +58,11 @@ class Exif2Dict:
             gps["longitude"] = lon
         return gps
     
-    def get_exif(self, key):
-        exif = {}
-        val = self.__get_if_exist(key)
+    def get_exif(self, key): #calls for specifc EXIF key value
+        exif = {} # initialize exif
+        val = self.__get_if_exist(key) # test if key exits in EXIF data
         if val:
-            if key == 'EXIF FNumber':
+            if key == 'EXIF FNumber': #corrects FNumber
                 val = val.values[0].num / val.values[0].den
             else:
                 val = val.printable

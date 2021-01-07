@@ -13,7 +13,7 @@ CODEPOINTS = '1234567890AÄÀBCÇDÈÉÊEFGHIÍJKLMNÑOÓÖPQRSTUÚÙÜVWXYZ., _
 
 class ViewerDisplay:
 
-    def __init__(self, config):
+    def __init__(self, config): #breaks out config files to individual variables.
         self.__logger = logging.getLogger("viewer_display.ViewerDisplay")
         self.__blur_amount = config['blur_amount']
         self.__blur_zoom = config['blur_zoom']  
@@ -28,6 +28,7 @@ class ViewerDisplay:
         self.__fit = config['fit']
         self.__auto_resize = config['auto_resize']
         self.__kenburns = config['kenburns']
+        #defines default values needed but not configured in config
         if self.__kenburns:
             self.__kb_up = True
             self.__fit = False
@@ -124,17 +125,22 @@ class ViewerDisplay:
         return tex
 
     def __tidy_name(self, path_name):
-        name = os.path.basename(path_name)
-        name = ''.join([c for c in name if c in CODEPOINTS])
+        ####
+        # Modify to make TIDY name = Title
+        ###
+        #name = os.path.basename(path_name)
+        #name = ''.join([c for c in name if c in CODEPOINTS])
+        name = path_name
+        name = self.__get_if_exist('Image ImageDescription')
         return name
 
     def is_in_transition(self):
         return self.__in_transition
 
-    def slideshow_start(self):
+    def slideshow_start(self):  #starts the slideshow after configs set up and MQTT initialized
         self.__display = pi3d.Display.create(x=0, y=0, frames_per_second=self.__fps,
-              display_config=pi3d.DISPLAY_CONFIG_HIDE_CURSOR, background=self.__background)
-        camera = pi3d.Camera(is_3d=False)
+              display_config=pi3d.DISPLAY_CONFIG_HIDE_CURSOR, background=self.__background) # Creates a pi3d Display
+        camera = pi3d.Camera(is_3d=False) #sets 2d image
         shader = pi3d.Shader(self.__shader)
         self.__slide = pi3d.Sprite(camera=camera, w=self.__display.width, h=self.__display.height, z=5.0)
         self.__slide.set_shader(shader)
@@ -158,25 +164,27 @@ class ViewerDisplay:
 
 
     def slideshow_is_running(self, filename = None, orientation = 1, time_delay = 200.0, fade_time = 10.0):
-        tm = time.time()
+        tm = time.time() # current time
         if filename is not None:
-            self.__sbg = self.__sfg
-            self.__sfg = None
-            self.__next_tm = tm + time_delay
-            self.__name_tm = tm + self.__show_names_tm
-            self.__sfg = self.__tex_load(filename, orientation, (self.__display.width, self.__display.height))
-            self.__alpha = 0.0
+            self.__sbg = self.__sfg # foreground slide becomes background slide
+            self.__sfg = None # forground slide set to none
+            self.__next_tm = tm + time_delay #next slide change
+            self.__name_tm = tm + self.__show_names_tm # increment how long name bar is show until
+            self.__sfg = self.__tex_load(filename, orientation, (self.__display.width, self.__display.height)) # load texture for new foreground slide
+            self.__alpha = 0.0 # set alpha to 0
             self.__delta_alpha = 1.0 / (self.__fps * fade_time) # delta alpha
-            # set the file name as the description
+            ####
+            # set the text of the description - here it is set to filename - REPLACE
+            ####
             if self.__show_names_tm > 0.0:
-                self.__textblock.set_text(text_format="{}".format(self.__tidy_name(filename)))
-                self.__text.regen()
+                self.__textblock.set_text(text_format="{}".format(self.__tidy_name(filename)))  # <<<< Test for text block here
+                self.__text.regen() # Draw text box
             else: # could have a NO IMAGES selected and being drawn
                 self.__textblock.set_text(text_format="{}".format(" "))
                 self.__textblock.colouring.set_colour(alpha=0.0)
                 self.__text.regen()
 
-            if self.__sbg is None: # first time through
+            if self.__sbg is None: # first time through - no background image on first showing
                 self.__sbg = self.__sfg
             self.__slide.set_textures([self.__sfg, self.__sbg])
             self.__slide.unif[45:47] = self.__slide.unif[42:44] # transfer front width and height factors to back
@@ -205,13 +213,13 @@ class ViewerDisplay:
             self.__slide.unif[49] = self.__ystep * t_factor
 
         if self.__alpha < 1.0: # transition is happening
-            self.__in_transition = True
+            self.__in_transition = True #set transition flag
             self.__alpha += self.__delta_alpha
             if self.__alpha > 1.0:
                 self.__alpha = 1.0
             self.__slide.unif[44] = self.__alpha * self.__alpha * (3.0 - 2.0 * self.__alpha)
         else: # no transition effect safe to resuffle etc
-            self.__in_transition = False
+            self.__in_transition = False # clear transistion flag
 
         self.__slide.draw()
 
