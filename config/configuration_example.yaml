@@ -31,7 +31,9 @@ model:
     'EXIF ISOSpeedRatings', 
     'EXIF FocalLength', 
     'EXIF DateTimeOriginal', 
-    'Image Model']
+    'Image Model'
+    'Image ImageDescription']
+
 
 mqtt:                                     
   server: "your_mqtt_broker"              # No defaults for server
